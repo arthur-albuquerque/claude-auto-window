@@ -57,14 +57,18 @@ RUNNING_JSON=$("$CLAUDE" agents --json 2>/dev/null || echo '[]')
 find "$PROJECTS" -maxdepth 2 -name '*.jsonl' -mmin -720 2>/dev/null | while read -r f; do
   sid="${${f:t}%.jsonl}"
 
-  # Skip if nudged in the last 6h.
+  # Skip if nudged in the last 45 min. Short on purpose: a session nudged in
+  # one window can stall again in the next, and a 5h window must never be
+  # blanket-covered by a stale dedup entry.
   last=$(awk -v s="$sid" '$1==s {t=$2} END{print t+0}' "$NUDGED")
-  (( NOW - last < 21600 )) && continue
+  (( NOW - last < 2700 )) && continue
 
   # Stalled = one of the final transcript entries is an API-error message
   # carrying the limit text. Requiring isApiErrorMessage on the same line
   # keeps mere conversational mentions of "usage limit" from triggering.
-  tail -n 6 "$f" | LC_ALL=C grep -a '"isApiErrorMessage":true' \
+  # 25 lines because queued messages / system / task_reminder entries pile
+  # up after the limit error while the session sits blocked.
+  tail -n 25 "$f" | LC_ALL=C grep -a '"isApiErrorMessage":true' \
     | LC_ALL=C grep -qiE "$LIMIT_RE" || continue
 
   cwd=$(head -c 4000 "$f" | LC_ALL=C grep -ao '"cwd":"[^"]*"' | head -1 | sed 's/"cwd":"//;s/"$//')

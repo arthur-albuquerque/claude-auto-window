@@ -15,7 +15,12 @@ if [[ "$mode" == live ]]; then
   "$CLAUDE" -p --model sonnet --effort low \
     "Call ListAgents, find the agent named '$name', then use the SendMessage tool to send it exactly the message 'continue'. Do nothing else, change no files."
 else
-  # Resume the dead session with its own saved model/effort.
-  "$CLAUDE" -p --resume "$sid" --permission-mode acceptEdits "continue"
+  # Resume the dead session as a BACKGROUND AGENT (its own saved model/
+  # effort). A plain -p resume works but is invisible: UI hosts like t3
+  # render their own store, so appended transcript work never surfaces.
+  # --bg forks into a named agent that shows in agent view (incl. mobile),
+  # can be attached to, and is live-nudgeable next window.
+  "$CLAUDE" --bg --resume "$sid" -n "auto-continue-${sid%%-*}" \
+    --permission-mode acceptEdits "continue"
 fi
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] done rc=$?"

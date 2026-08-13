@@ -75,15 +75,23 @@ find "$PROJECTS" -maxdepth 2 -name '*.jsonl' -mmin -720 2>/dev/null | while read
   [[ -d "${cwd:-/nonexistent}" ]] || cwd="$HOME"
   echo "$sid $NOW" >> "$NUDGED"
 
-  if echo "$RUNNING_JSON" | grep -q "$sid"; then
+  # SendMessage addresses live sessions by agent NAME, not session UUID —
+  # resolve it from the agents listing.
+  name=$(echo "$RUNNING_JSON" | /usr/bin/python3 -c "
+import json,sys
+try: rows=json.load(sys.stdin)
+except Exception: rows=[]
+m=[r.get('name','') for r in rows if r.get('sessionId')=='$sid']
+print(m[0] if m else '')" 2>/dev/null)
+  if [[ -n "$name" ]]; then
     mode=live
   else
     mode=idle
   fi
-  log "nudge: $sid $mode -> nudge-one.sh in $cwd"
+  log "nudge: $sid $mode name=${name:-none} -> nudge-one.sh in $cwd"
   # Detached (plist sets AbandonProcessGroup=true) so nudges survive this
   # launchd job exiting.
-  nohup /bin/zsh "$DIR/nudge-one.sh" "$mode" "$sid" "$cwd" \
+  nohup /bin/zsh "$DIR/nudge-one.sh" "$mode" "$sid" "$cwd" "$name" \
     >> "$DIR/logs/nudge-$sid.log" 2>&1 &
 done
 exit 0

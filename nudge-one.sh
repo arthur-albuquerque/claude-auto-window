@@ -1,16 +1,19 @@
 #!/bin/zsh
-# Nudge a single limit-stalled session: $1=mode(live|idle) $2=session_id $3=cwd
+# Nudge a single limit-stalled session:
+#   $1=mode(live|idle) $2=session_id $3=cwd $4=agent_name (live only)
 # Invoked detached by watch.sh so it survives the launchd job exiting
 # (plist sets AbandonProcessGroup=true).
 set -u
 CLAUDE="$HOME/.local/bin/claude"
-mode="$1" sid="$2" cwd="$3"
+mode="$1" sid="$2" cwd="$3" name="${4:-}"
 cd "$cwd" || cd "$HOME"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] $mode nudge start in $PWD"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] $mode nudge start in $PWD (name=$name)"
 if [[ "$mode" == live ]]; then
   # Deliver "continue" into the still-running session via SendMessage.
+  # SendMessage addresses by agent name (as shown by ListAgents), never by
+  # session UUID.
   "$CLAUDE" -p --model sonnet --effort low \
-    "Use the SendMessage tool to send exactly the message 'continue' to the local session with id $sid (use ListAgents to find its address if needed). Do nothing else, change no files."
+    "Call ListAgents, find the agent named '$name', then use the SendMessage tool to send it exactly the message 'continue'. Do nothing else, change no files."
 else
   # Resume the dead session with its own saved model/effort.
   "$CLAUDE" -p --resume "$sid" --permission-mode acceptEdits "continue"

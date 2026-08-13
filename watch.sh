@@ -67,23 +67,23 @@ find "$PROJECTS" -maxdepth 2 -name '*.jsonl' -mmin -720 2>/dev/null | while read
   tail -n 6 "$f" | LC_ALL=C grep -a '"isApiErrorMessage":true' \
     | LC_ALL=C grep -qiE "$LIMIT_RE" || continue
 
-  cwd=$(tail -n 50 "$f" | LC_ALL=C grep -ao '"cwd":"[^"]*"' | tail -1 | sed 's/"cwd":"//;s/"$//')
+  cwd=$(head -c 4000 "$f" | LC_ALL=C grep -ao '"cwd":"[^"]*"' | head -1 | sed 's/"cwd":"//;s/"$//')
+  [[ -z "$cwd" ]] && cwd=$(tail -n 50 "$f" | LC_ALL=C grep -ao '"cwd":"[^"]*"' | tail -1 | sed 's/"cwd":"//;s/"$//')
+  # The watcher's own "Hi" pings during a limited period also end on a limit
+  # error — never nudge those.
+  [[ "$cwd" == "$DIR/pingcwd" ]] && continue
   [[ -d "${cwd:-/nonexistent}" ]] || cwd="$HOME"
   echo "$sid $NOW" >> "$NUDGED"
 
   if echo "$RUNNING_JSON" | grep -q "$sid"; then
-    # Session is live (open terminal / background agent): deliver "continue"
-    # into it via a throwaway helper session using SendMessage.
-    log "nudge: $sid is live -> SendMessage continue"
-    (cd "$cwd" && "$CLAUDE" -p --model sonnet --effort low \
-      "Use the SendMessage tool to send exactly the message 'continue' to the local session with id $sid (use ListAgents to find its address if needed). Do nothing else, change no files." \
-      >> "$DIR/logs/nudge-$sid.log" 2>&1 &)
+    mode=live
   else
-    # Session is not running: resume it headlessly with its own saved
-    # model/effort (no --model override) and tell it to continue.
-    log "nudge: $sid is idle -> headless resume in $cwd"
-    (cd "$cwd" && "$CLAUDE" -p --resume "$sid" "continue" \
-      >> "$DIR/logs/nudge-$sid.log" 2>&1 &)
+    mode=idle
   fi
+  log "nudge: $sid $mode -> nudge-one.sh in $cwd"
+  # Detached (plist sets AbandonProcessGroup=true) so nudges survive this
+  # launchd job exiting.
+  nohup /bin/zsh "$DIR/nudge-one.sh" "$mode" "$sid" "$cwd" \
+    >> "$DIR/logs/nudge-$sid.log" 2>&1 &
 done
 exit 0

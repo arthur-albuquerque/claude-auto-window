@@ -9,6 +9,8 @@
     <string>/bin/zsh</string>
     <string>/Users/arthur/.claude/auto-window/watch.sh</string>
   </array>
+  <key>AbandonProcessGroup</key>
+  <true/>
   <key>StartInterval</key>
   <integer>600</integer>
   <key>RunAtLoad</key>

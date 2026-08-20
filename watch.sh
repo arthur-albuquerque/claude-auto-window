@@ -4,14 +4,21 @@
 #
 # Step 1 (ping): send a tiny "Hi" on Sonnet low effort so a fresh 5-hour
 #   usage window starts the moment one is available, even overnight.
-# Step 2 (nudge): when a ping succeeds right after a limited period, look for
-#   sessions whose transcript ends on a usage-limit error and say "continue"
-#   to them (SendMessage for live sessions, headless --resume for dead ones).
+# Step 2 (nudge): DISABLED as of 2026-08-20 (NUDGE=0 below). Claude Code
+#   2.1.234 ships its own auto-continue after a usage limit; we are running on
+#   that alone to see whether it covers every case this watcher used to.
+#   The code and nudge-one.sh stay in place: set NUDGE=1 to bring it back.
+#   When on: after a limited->ok transition it finds sessions whose transcript
+#   ends on a usage-limit error and says "continue" to them (SendMessage for
+#   live sessions, --bg --resume for dead ones).
 
 set -u
 CLAUDE="$HOME/.local/bin/claude"
 DIR="$HOME/.claude/auto-window"
 STATE="$DIR/state"            # last observed state: ok | limited
+NUDGE=0                       # 1 = revive stalled sessions ourselves;
+                              # 0 = leave it to Claude Code's built-in
+                              #     auto-continue (2.1.234+)
 NUDGED="$DIR/nudged.log"      # "session_id epoch" lines; never nudge twice within 6h
 LOG="$DIR/logs/watch.log"
 PROJECTS="$HOME/.claude/projects"
@@ -46,6 +53,13 @@ echo ok > "$STATE"
 log "ping: OK (prev=$PREV) — window active"
 
 # ---- Step 2: nudge stalled sessions --------------------------------------
+# Off by default: Claude Code 2.1.234+ auto-continues limit-stalled sessions
+# itself, and two nudges racing on one session is worse than none.
+if (( ! NUDGE )); then
+  [[ "$PREV" == limited ]] && log "nudge: skipped (NUDGE=0; built-in auto-continue owns this)"
+  exit 0
+fi
+
 # Only right after a limited→ok transition; otherwise nothing to revive.
 [[ "$PREV" == limited ]] || exit 0
 log "nudge: scanning for sessions stopped at the usage limit"
